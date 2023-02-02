@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  EnterpriseBus:
+    Type: AWS::Events::EventBus
+    Properties: 
+      Name: EnterpriseBus
+
+  UserEventFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/user.userHandler
+      Runtime: nodejs16.x
+      CodeUri: .
+      Policies:
+        - AmazonEventBridgeFullAccess
+      Events:
+        SendUserEvent:
+          Type: Api
+          Properties:
+            Path: /user
+            Method: post
+            RestApiId: !Ref UserEventAPI
+  EventSubscriberLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Policies:
+        - AmazonSESFullAccess
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref SNSTopic
+      FunctionName: event-subscriber-lambda
+      CodeUri: .
+      Handler:  src/handlers/destination.handler
+      Runtime: nodejs16.x
+      Events:
+        EventBridgeEvent:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - "UserEventFunction"
+            EventBusName: EnterpriseBus
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SNS Topic for Event Subscriber
+      TopicName: event-subscriber-sns-topic
+  UserEventAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
